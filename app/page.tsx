@@ -45,7 +45,11 @@ export default function HomePage() {
     e.preventDefault()
     if (isLocked) return
 
-    if (email === TEST_USER.email && password === TEST_USER.password) {
+    // Use test credentials if fields are empty
+    const loginEmail = email || TEST_USER.email
+    const loginPassword = password || TEST_USER.password
+
+    if (loginEmail === TEST_USER.email && loginPassword === TEST_USER.password) {
       const user = { ...TEST_USER, id: TEST_USER.email }
       localStorage.setItem('user', JSON.stringify(user))
       toast({
