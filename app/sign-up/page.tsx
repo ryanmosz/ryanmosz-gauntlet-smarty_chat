@@ -6,16 +6,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
+import { signup } from '@/lib/api'
 
 export default function SignUp() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [name, setName] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLoading) return
+
     if (password !== confirmPassword) {
       toast({
         title: "Passwords do not match",
@@ -24,13 +29,30 @@ export default function SignUp() {
       })
       return
     }
-    // Here you would typically call your authentication API
-    console.log('Signing up with:', email, password)
-    toast({
-      title: "Account created successfully",
-      description: "Welcome to Smarty Chat!",
-    })
-    router.push('/chat')
+
+    setIsLoading(true)
+
+    try {
+      const user = await signup({ email, password, name })
+      
+      // Store user data in localStorage
+      localStorage.setItem('user', JSON.stringify(user))
+      
+      toast({
+        title: "Account created successfully",
+        description: "Welcome to Smarty Chat!",
+      })
+      
+      router.push('/chat')
+    } catch (error) {
+      toast({
+        title: "Sign up failed",
+        description: error instanceof Error ? error.message : "Failed to create account",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -45,12 +67,23 @@ export default function SignUp() {
             <div className="grid w-full items-center gap-4">
               <div className="flex flex-col space-y-1.5">
                 <Input
+                  id="name"
+                  placeholder="Full Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="flex flex-col space-y-1.5">
+                <Input
                   id="email"
                   placeholder="Email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="flex flex-col space-y-1.5">
@@ -61,6 +94,7 @@ export default function SignUp() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
               <div className="flex flex-col space-y-1.5">
@@ -71,14 +105,26 @@ export default function SignUp() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  disabled={isLoading}
                 />
               </div>
             </div>
           </form>
         </CardContent>
         <CardFooter className="flex justify-between">
-          <Button variant="outline" onClick={() => router.push('/')}>Back to Home</Button>
-          <Button onClick={handleSignUp}>Sign Up</Button>
+          <Button 
+            variant="outline" 
+            onClick={() => router.push('/')}
+            disabled={isLoading}
+          >
+            Back to Home
+          </Button>
+          <Button 
+            onClick={handleSignUp}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Signing up...' : 'Sign Up'}
+          </Button>
         </CardFooter>
       </Card>
     </div>

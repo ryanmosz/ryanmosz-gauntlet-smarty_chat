@@ -9,13 +9,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/components/ui/use-toast"
 import { Eye, EyeOff } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { login } from '@/lib/api'
+import type { AuthResponse } from '@/types/api'
 
 // Test user credentials
 const TEST_USER = {
-  name: 'John Doe',
   email: 'jd@example.com',
-  password: 'password1!',
-  avatar: null
+  password: 'password1!'
 }
 
 export default function HomePage() {
@@ -26,6 +26,7 @@ export default function HomePage() {
   const [loginAttempts, setLoginAttempts] = useState(0)
   const [isLocked, setIsLocked] = useState(false)
   const [lockoutTimer, setLockoutTimer] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -43,22 +44,30 @@ export default function HomePage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isLocked) return
+    if (isLocked || isLoading) return
 
-    // Use test credentials if fields are empty
-    const loginEmail = email || TEST_USER.email
-    const loginPassword = password || TEST_USER.password
+    setIsLoading(true)
 
-    if (loginEmail === TEST_USER.email && loginPassword === TEST_USER.password) {
-      const user = { ...TEST_USER, id: TEST_USER.email }
+    try {
+      // Use test credentials if both fields are empty
+      const useTestCredentials = !email.trim() && !password.trim()
+      const loginEmail = useTestCredentials ? TEST_USER.email : email
+      const loginPassword = useTestCredentials ? TEST_USER.password : password
+
+      const user = await login({ email: loginEmail, password: loginPassword })
+      
+      // Store user data in localStorage
       localStorage.setItem('user', JSON.stringify(user))
+      
       toast({
         title: "Logged in successfully",
-        description: `Welcome back, ${TEST_USER.name}!`,
+        description: `Welcome back, ${user.name}!`,
       })
+      
       router.push('/chat')
-    } else {
+    } catch (error) {
       setLoginAttempts((prev) => prev + 1)
+      
       if (loginAttempts === 1) {
         toast({
           title: "Login failed",
@@ -80,6 +89,8 @@ export default function HomePage() {
           variant: "destructive",
         })
       }
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -102,7 +113,11 @@ export default function HomePage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Log In</CardTitle>
-          <CardDescription>Enter your credentials to access Smarty Chat</CardDescription>
+          <CardDescription>
+            Enter your credentials to access Smarty Chat
+            <br />
+            <span className="text-sm text-gray-500">(Leave both fields empty to use test account)</span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
@@ -114,8 +129,7 @@ export default function HomePage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isLocked}
+                  disabled={isLocked || isLoading}
                 />
               </div>
               <div className="flex flex-col space-y-1.5">
@@ -126,14 +140,13 @@ export default function HomePage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isLocked}
+                    disabled={isLocked || isLoading}
                   />
                   <button
                     type="button"
                     onClick={togglePasswordVisibility}
                     className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                    disabled={isLocked}
+                    disabled={isLocked || isLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" aria-hidden="true" />
@@ -150,8 +163,12 @@ export default function HomePage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
-          <Button className="w-full" onClick={handleLogin} disabled={isLocked}>
-            {isLocked ? `Locked (${lockoutTimer}s)` : 'Log In'}
+          <Button 
+            className="w-full" 
+            onClick={handleLogin} 
+            disabled={isLocked || isLoading}
+          >
+            {isLocked ? `Locked (${lockoutTimer}s)` : isLoading ? 'Logging in...' : 'Log In'}
           </Button>
           <div className="text-sm text-center">
             Don't have an account?{' '}

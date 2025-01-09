@@ -1,0 +1,10 @@
+{
+  "buildCommand": "prisma generate && prisma migrate deploy && next build",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
+  "env": {
+    "NEXTAUTH_URL": "https://${VERCEL_URL}",
+    "PRISMA_CLIENT_ENGINE_TYPE": "dataproxy"
+  }
+} 

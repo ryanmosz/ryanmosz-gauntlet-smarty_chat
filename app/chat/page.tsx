@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,6 +18,37 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from 'next/link'
 import { getInitials, getAvatarColor } from "@/lib/utils"
 
+const styles = {
+  emojiPickerContainer: {
+    position: 'relative' as const,
+    zIndex: 1000,
+  }
+}
+
+interface ChatMessage {
+  id: number
+  sender: string
+  senderId: string
+  content: string
+  timestamp: string
+  avatar?: string
+  file?: {
+    name: string
+    url: string
+  }
+}
+
+interface DMMessages {
+  [key: string]: ChatMessage[]
+}
+
+interface ActiveChat {
+  type: 'channel' | 'dm'
+  id: string | number
+  name: string
+  status: string
+}
+
 // Mock data
 const channels = [
   { id: 1, name: 'General' },
@@ -29,13 +60,13 @@ const directMessages = [
   { id: 'user2', name: 'Bob', status: 'offline' },
 ]
 
-const createInitialChannelMessages = (currentUserName: string) => [
+const createInitialChannelMessages = (currentUserName: string): ChatMessage[] => [
   { id: 1, sender: 'Alice', senderId: 'user1', content: 'Hello, everyone!', timestamp: '10:00 AM' },
   { id: 2, sender: 'Bob', senderId: 'user2', content: 'Hi Alice, how are you?', timestamp: '10:05 AM' },
   { id: 3, sender: currentUserName, senderId: '', content: 'Hey all, glad to be here!', timestamp: '10:10 AM' },
 ]
 
-const createMockDMMessages = (currentUserName: string) => ({
+const createMockDMMessages = (currentUserName: string): DMMessages => ({
   'user1': [
     { id: 1, sender: 'Alice', senderId: 'user1', content: 'Hey, how are you?', timestamp: '11:00 AM' },
     { id: 2, sender: currentUserName, senderId: '', content: 'I\'m doing great, thanks! How about you?', timestamp: '11:05 AM' },
@@ -47,13 +78,15 @@ const createMockDMMessages = (currentUserName: string) => ({
 })
 
 export default function ChatPage() {
-  const [activeChat, setActiveChat] = useState({ type: 'channel', id: 1, name: 'General', status: '' })
+  const [activeChat, setActiveChat] = useState<ActiveChat>({ type: 'channel', id: 1, name: 'General', status: '' })
   const [message, setMessage] = useState('')
-  const [channelMessages, setChannelMessages] = useState<any[]>([])
-  const [dmMessages, setDmMessages] = useState<any>({})
+  const [channelMessages, setChannelMessages] = useState<ChatMessage[]>([])
+  const [dmMessages, setDmMessages] = useState<DMMessages>({})
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [currentUser, setCurrentUser] = useState({ id: '', name: '', email: '', avatar: null as string | null })
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false)
   const router = useRouter()
+  const popoverRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -75,23 +108,25 @@ export default function ChatPage() {
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault()
     if (message.trim() || selectedFile) {
-      const newMessage = {
+      const newMessage: ChatMessage = {
         id: Date.now(),
         sender: currentUser.name,
         senderId: currentUser.id,
         content: message,
         timestamp: new Date().toLocaleTimeString(),
-        avatar: currentUser.avatar,
-        file: selectedFile ? {
-          name: selectedFile.name,
-          url: URL.createObjectURL(selectedFile)
-        } : undefined
+        ...(currentUser.avatar && { avatar: currentUser.avatar }),
+        ...(selectedFile && {
+          file: {
+            name: selectedFile.name,
+            url: URL.createObjectURL(selectedFile)
+          }
+        })
       }
 
       if (activeChat.type === 'channel') {
         setChannelMessages([...channelMessages, newMessage])
       } else {
-        setDmMessages(prevState => ({
+        setDmMessages((prevState: DMMessages) => ({
           ...prevState,
           [activeChat.id]: [...(prevState[activeChat.id] || []), newMessage]
         }))
@@ -110,13 +145,17 @@ export default function ChatPage() {
     setActiveChat({ type, id, name, status })
   }
 
-  const handleEmojiSelect = (emojiObject: any) => {
+  const handleEmojiSelect = (emojiObject: { emoji: string }) => {
     setMessage(prevMessage => prevMessage + emojiObject.emoji)
+    // Force close by clicking outside
+    if (popoverRef.current) {
+      popoverRef.current.click()
+    }
   }
 
   const activeMessages = activeChat.type === 'channel' 
     ? channelMessages 
-    : dmMessages[activeChat.id] || []
+    : dmMessages[activeChat.id as string] || []
 
   useEffect(() => {
     const handleAvatarUpdate = (event: CustomEvent) => {
@@ -131,7 +170,7 @@ export default function ChatPage() {
         )
       )
       // Update avatars and names in DM messages
-      setDmMessages(prevDmMessages => {
+      setDmMessages((prevDmMessages: DMMessages) => {
         const updatedDmMessages = { ...prevDmMessages }
         Object.keys(updatedDmMessages).forEach(dmId => {
           updatedDmMessages[dmId] = updatedDmMessages[dmId].map(msg => 
@@ -236,13 +275,26 @@ export default function ChatPage() {
             <FileUpload onFileSelect={handleFileSelect} />
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="bg-background hover:bg-muted text-foreground">
+                <Button 
+                  ref={popoverRef}
+                  variant="outline" 
+                  size="icon" 
+                  className="bg-background hover:bg-muted text-foreground"
+                >
                   <Smile className="h-4 w-4" />
                   <span className="sr-only">Add emoji</span>
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <EmojiPicker onEmojiClick={handleEmojiSelect} />
+              <PopoverContent className="w-full p-0" sideOffset={5}>
+                <div style={styles.emojiPickerContainer}>
+                  <EmojiPicker
+                    onEmojiClick={handleEmojiSelect}
+                    width="100%"
+                    height="350px"
+                    lazyLoadEmojis={true}
+                    autoFocusSearch={false}
+                  />
+                </div>
               </PopoverContent>
             </Popover>
             <Input

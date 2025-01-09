@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  assistant
+}
+
+model ChatSession {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @db.Uuid @map("user_id")
+  title     String?   @db.VarChar(255)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime  @default(now()) @db.Timestamptz(6) @map("updated_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@map("chat_sessions")
+  @@index([userId], map: "idx_chat_sessions_user_id")
+}
+
+model Message {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chatSessionId String      @db.Uuid @map("chat_session_id")
+  role          Role
+  content       String
+  createdAt     DateTime    @default(now()) @db.Timestamptz(6) @map("created_at")
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+  @@index([chatSessionId], map: "idx_messages_chat_session_id")
+}
+
+model User {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String        @unique @db.VarChar(255)
+  passwordHash String        @db.VarChar(255) @map("password_hash")
+  name         String        @db.VarChar(255)
+  avatarUrl    String?       @map("avatar_url")
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt    DateTime      @default(now()) @db.Timestamptz(6) @map("updated_at")
+  chatSessions ChatSession[]
+
+  @@map("users")
+  @@index([email], map: "idx_users_email")
+}
